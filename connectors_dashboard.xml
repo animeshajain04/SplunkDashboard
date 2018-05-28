@@ -1,0 +1,876 @@
+<form>
+  <label>Connectors - Data Platform - Overview</label>
+  <fieldset autoRun="true">
+    <input type="dropdown" token="index">
+      <label>Environment</label>
+      <choice value="plat_app_preprod">dev</choice>
+      <choice value="plat_app_prod">prod</choice>
+      <default>dev</default>t<change>
+        <condition value="plat_app_preprod">
+          <set token="show_dev_source_types">true</set>
+        </condition>
+        <condition>
+          <unset token="show_dev_source_types"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="dropdown" token="sourcetype_suffix" depends="$show_dev_source_types$">
+      <label>Sourcetype</label>
+      <choice value="">dev</choice>
+      <choice value="-qa1-va7">qa1</choice>
+      <choice value="-stage-va7">stage</choice>
+      <default></default>
+    </input>
+    <input type="dropdown" token="span">
+      <label>Span</label>
+      <default>10m</default>
+      <choice value="1m">1m</choice>
+      <choice value="5m">5m</choice>
+      <choice value="10m">10m</choice>
+      <choice value="15m">15m</choice>
+      <choice value="30m">30m</choice>
+      <choice value="1h">1h</choice>
+      <choice value="3h">3h</choice>
+      <choice value="6h">6h</choice>
+      <choice value="12h">12h</choice>
+      <choice value="1d">1d</choice>
+      <choice value="1w">1w</choice>
+    </input>
+    <input type="time">
+      <label>Interval</label>
+      <default>
+        <earliestTime>-12h</earliestTime>
+        <latestTime>now</latestTime>
+      </default>
+    </input>
+    <input type="dropdown" token="ADFpipeline">
+      <label>ADF Failed Pipelines</label>
+      <choice value="-dev">dev</choice>
+      <choice value="-stg">stage</choice>
+      <choice value="prod">prod</choice>
+      <initialValue>-dev</initialValue>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Connectors - overview</title>
+      <chart>
+        <title>ERROR by service (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ OR sourcetype=connectors-rest$sourcetype_suffix$ "lvl=ERROR" | timechart span=$span$ count(sourcetype) by sourcetype</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Failed Pipeline Runs</title>
+      <table>
+        <search>
+          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ | spath resourceId | spath level | spath category | search category="PipelineRuns" level=Error resourceId="/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*" | table _time, category, pipelineName, level, failureType, properties.Parameters.imsOrgId, resourceId, start | dedup pipelineName</query>
+          <earliest>-1d</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>[Observer] Errors</title>
+      <single>
+        <title>Total errors</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=ERROR" | stats count as Total</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x65a637","0xad3230","0xd93f3c"]</option>
+        <option name="rangeValues">[0,10]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>[Observer] Errors</title>
+      <chart>
+        <title>Group by message</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=ERROR" | rex field=_raw ":[\d]+\s-\s(?&lt;failure&gt;[\w\s]+)" | stats count(failure) by failure</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">266</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[Observer] Errors</title>
+      <chart>
+        <title>Group by IMS org</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=ERROR" | stats count(imsOrg) by imsOrg</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">265</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[Observer] Errors</title>
+      <chart>
+        <title>Group by Tenant</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=ERROR" "for Tenant=" | rex field=_raw "Tenant=(?&lt;tenant&gt;[\w]+@AdobeOrg)" | stats count(tenant) by tenant</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">265</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>[REST] Errors</title>
+      <single>
+        <title>Total errors</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=ERROR" | stats count as Total</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x65a637","0xad3230","0xd93f3c"]</option>
+        <option name="rangeValues">[0,10]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>[REST] Errors</title>
+      <chart>
+        <title>Group by message</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=ERROR" | rex field=_raw ":[\d]+\s-\s(?&lt;failure&gt;[\w\s]+)" | stats count(failure) by failure</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[REST] Errors</title>
+      <chart>
+        <title>Group by IMS org</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=ERROR" | stats count(imsOrg) by imsOrg</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[REST] Errors</title>
+      <chart>
+        <title>Group by Tenant</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=WARN" "for Tenant=" | rex field=_raw "Tenant=(?&lt;tenant&gt;[\w]+@AdobeOrg)" | stats count(tenant) by tenant</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">265</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>[OBSERVER] Pipeline</title>
+      <chart>
+        <title>Reached Pipeline Sync Marker message (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "Reached a Pipeline Sync Marker message" | where like(CONTAINER_TAG,"%-"+"$environment$"+"-%") | timechart span=$span$ count(sourcetype) by sourcetype</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.seriesColors">[0x006500,0x007F00]</option>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[OBSERVER] Pipeline</title>
+      <chart>
+        <title>Sent Sync Marker (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "Sent Pipeline Sync Marker message" | timechart span=$span$ count(sourcetype) by sourcetype</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.seriesColors">[0x006500,0x007F00]</option>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[OBSERVER] Pipeline</title>
+      <chart>
+        <title>Received pipeline ping (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "Received ping pipeline message" | timechart span=$span$ count(sourcetype) by sourcetype</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.seriesColors">[0x006500,0x007F00]</option>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[OBSERVER] Pipeline</title>
+      <chart>
+        <title>Failed Sync Marker (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "Error while sending Pipeline Sync message" | timechart span=$span$ count(sourcetype) by sourcetype</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.seriesColors">[0xE50000]</option>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[OBSERVER] Pipeline</title>
+      <chart>
+        <title>Fatal Thread Exceptions (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "Message=\"Fatal Thread Exception\"" | timechart span=$span$ count(sourcetype) by sourcetype</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.seriesColors">[0xE50000]</option>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Connectors Dependencies Retries Exceeded</title>
+      <chart>
+        <title>Retries exceeded on API...</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ OR sourcetype=connectors-rest$sourcetype_suffix$ "lvl=INFO" | rex field=_raw "Retries exceeded on api=(?&lt;retry&gt;\[(.*?)\])" | stats count(retry) by retry</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Connectors Dependencies Retries Exceeded</title>
+      <chart>
+        <title>Retries exceeded by IMS ORG</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ OR sourcetype=connectors-rest$sourcetype_suffix$ "lvl=INFO" "Retries exceeded on api=" | stats count(Organization) by Organization</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Connectors Dependencies Retry Attempts</title>
+      <chart>
+        <title>Attempting to retry on API...</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ OR sourcetype=connectors-rest$sourcetype_suffix$ "lvl=INFO" | rex field=_raw "Attempting to retry on api=(?&lt;retry&gt;\[(.*?)\])" | stats count(retry) by retry</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">266</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Connectors Dependencies Retry Attempts</title>
+      <chart>
+        <title>Attempting to retry by IMS ORG</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ OR sourcetype=connectors-rest$sourcetype_suffix$ "lvl=INFO" "Attempting to retry on api=" | stats count(Organization) by Organization</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">266</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Connectors Quarantined Messages</title>
+      <single>
+        <title>Messages</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "Quarantined message caused by service error=" | stats count as Total</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="drilldown">all</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Connectors Quarantined Messages</title>
+      <chart>
+        <title>Group by Error Code</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ "lvl=INFO" "Quarantined message caused by service error=" | stats count(errorCode) by errorCode</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">266</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Connectors Quarantined Messages</title>
+      <chart>
+        <title>Group by Dependent Service</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ "lvl=INFO" "Quarantined message caused by service error=" | stats count(dependentService) by dependentService</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">266</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Connectors Failed to Quarantine Messages</title>
+      <single>
+        <title>Failed to Quarantine Messages</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ "lvl=ERROR" "Failed to quarantine Catalog message" | stats count as Total</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x65a637","0xad3230","0xd93f3c"]</option>
+        <option name="rangeValues">[0,10]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>[OBSERVER] Pipeline</title>
+      <chart>
+        <title>Catalog events by action type (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "Handling pipeline event of type" | rex field=_raw "event of type=(?&lt;type&gt;[\w]+)" | timechart span=$span$ count(type) by type limit=1000</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[OBSERVER] Pipeline</title>
+      <chart>
+        <title>Catalog events by entity type (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "Handling pipeline event of type" | rex field=_raw "for entity=(?&lt;entity&gt;[\w]+)" | timechart span=$span$ count(entity) by entity limit=1000</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Connectors - overview</title>
+      <chart>
+        <title>WARN by service (span=$span$)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ OR sourcetype=connectors-rest$sourcetype_suffix$ "lvl=WARN" | timechart span=$span$ count(sourcetype) by sourcetype</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>[REST] Warnings</title>
+      <single>
+        <title>Total warnings</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=WARN" | stats count as Total</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="height">127</option>
+        <option name="rangeColors">["0x65a637","0x6db7c6","0xf7bc38","0xf58f39","0xd93f3c"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>[REST] Warnings</title>
+      <chart>
+        <title>Group by message</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=WARN" | rex field=_raw ":[\d]+\s-\s(?&lt;failure&gt;[\w\s]+)" | stats count(failure) by failure</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[Observer] Warnings</title>
+      <single>
+        <title>Total warnings</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=WARN" | stats count as Total</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x65a637","0x6db7c6","0xf7bc38","0xf58f39","0xd93f3c"]</option>
+        <option name="rangeValues">[0,30,70,100]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>[Observer] Warnings</title>
+      <chart>
+        <title>Group by message</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=WARN" | rex field=_raw ":[\d]+\s-\s(?&lt;failure&gt;[\w\s]+)" | stats count(failure) by failure</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">266</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Connectors - Missing Temporal field on DSV Errors</title>
+      <single>
+        <title>Total errors</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=ERROR" | rex field=_raw "Failed to find temporalField on DatasetView=(?&lt;dsvId&gt;)" | stats count(dsvId) as Total</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="height">137</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Connectors - Missing Temporal field on DSV Errors</title>
+      <chart>
+        <title>Errors by IMS org</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ OR sourcetype=connectors-rest$sourcetype_suffix$ "lvl=ERROR" "Failed to find temporalField on DatasetView=" | stats count(imsOrg) by imsOrg</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">137</option>
+      </chart>
+    </panel>
+  </row>
+</form>
