@@ -47,8 +47,8 @@
       <label>ADF Failed Pipelines</label>
       <choice value="-dev">dev</choice>
       <choice value="-stg">stage</choice>
-      <choice value="prod">prod</choice>
-      <initialValue>-dev</initialValue>
+      <choice value="-prod">prod</choice>
+      <initialValue>-stg</initialValue>
     </input>
   </fieldset>
   <row>
@@ -89,40 +89,103 @@
   </row>
   <row>
     <panel>
-      <title>Failed Pipeline Runs</title>
-      <table>
+      <chart>
+        <title>ADF Pipelines Failed with System Errors in Last 30 Days (span = 1 Day)</title>
         <search>
-          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ | spath resourceId | spath level | spath category | search category="PipelineRuns" level=Error resourceId="/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*" | table _time, category, pipelineName, level, failureType, properties.Parameters.imsOrgId, resourceId, start | dedup pipelineName</query>
-          <earliest>-1d</earliest>
+          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ "/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*"  "SystemError" | timechart span=1d count(_raw) as FailedCount</query>
+          <earliest>-30d@d</earliest>
           <latest>now</latest>
-          <sampleRatio>1</sampleRatio>
         </search>
-        <option name="count">100</option>
-        <option name="dataOverlayMode">none</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>ADF Pipelines Failed with User Errors in last 30 Days (span = 1 Day)</title>
+        <search>
+          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ "/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*"  "UserError" | timechart span=1d count(_raw) as FailedCount</query>
+          <earliest>-30d@d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <table>
+        <title>Possible Data Loss Because of Failed Pipelines (Last 4 Hours)</title>
+        <search>
+          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ | spath properties.Parameters.ingestionEnd | spath resourceId | spath level | spath category | search category="PipelineRuns" level=Error resourceId="/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*" | spath properties.Parameters.ingestionStart | rename properties.Parameters.ingestionStart as ingestionStart | rename properties.Parameters.ingestionEnd as ingestionEnd | table resourceId, ingestionStart,  ingestionEnd, pipelineName | sort ingestionStart | stats count by ingestionStart, ingestionEnd, pipelineName | search count &gt; 1</query>
+          <earliest>-4h@m</earliest>
+          <latest>now</latest>
+        </search>
         <option name="drilldown">none</option>
-        <option name="percentagesRow">false</option>
-        <option name="rowNumbers">false</option>
-        <option name="totalsRow">false</option>
-        <option name="wrap">true</option>
       </table>
     </panel>
   </row>
   <row>
     <panel>
-      <title>[Observer] Errors</title>
-      <single>
-        <title>Total errors</title>
+      <title>Dependent Service Healtcheck Failures</title>
+      <chart>
+        <title>Observer (span=1min)</title>
         <search>
-          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=ERROR" | stats count as Total</query>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ "Retrieved the healthStatus=5*" | rex field=_raw " for serviceName=(?&lt;from&gt;.*) with response" | search from!=NULL | timechart span=1m count(from) by from</query>
+          <earliest>-12h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Dependent Service Healtcheck Failures</title>
+      <chart>
+        <title>Rest (span=1min)</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ "Retrieved the healthStatus=5*" | rex field=_raw " for serviceName=(?&lt;from&gt;.*) with response" | search from!=NULL | timechart span=1m count(from) by from</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>[REST] Errors</title>
+      <chart>
+        <title>Group by message</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=ERROR" | rex field=_raw ":[\d]+\s-\s(?&lt;failure&gt;[\w\s]+)" | stats count(failure) by failure</query>
           <earliest>$earliest$</earliest>
           <latest>$latest$</latest>
         </search>
-        <option name="colorMode">none</option>
-        <option name="drilldown">all</option>
-        <option name="rangeColors">["0x65a637","0xad3230","0xd93f3c"]</option>
-        <option name="rangeValues">[0,10]</option>
-        <option name="useColors">1</option>
-      </single>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
     </panel>
     <panel>
       <title>[Observer] Errors</title>
@@ -160,6 +223,40 @@
       </chart>
     </panel>
     <panel>
+      <title>[REST] Errors</title>
+      <chart>
+        <title>Group by IMS org</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=ERROR" | stats count(imsOrg) by imsOrg</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
       <title>[Observer] Errors</title>
       <chart>
         <title>Group by IMS org</title>
@@ -193,6 +290,24 @@
         <option name="charting.legend.placement">right</option>
         <option name="height">265</option>
       </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>[Observer] Errors</title>
+      <single>
+        <title>Total errors</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=ERROR" | stats count as Total</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x65a637","0xad3230","0xd93f3c"]</option>
+        <option name="rangeValues">[0,10]</option>
+        <option name="useColors">1</option>
+      </single>
     </panel>
     <panel>
       <title>[Observer] Errors</title>
@@ -229,8 +344,6 @@
         <option name="height">265</option>
       </chart>
     </panel>
-  </row>
-  <row>
     <panel>
       <title>[REST] Errors</title>
       <single>
@@ -246,74 +359,6 @@
         <option name="rangeValues">[0,10]</option>
         <option name="useColors">1</option>
       </single>
-    </panel>
-    <panel>
-      <title>[REST] Errors</title>
-      <chart>
-        <title>Group by message</title>
-        <search>
-          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=ERROR" | rex field=_raw ":[\d]+\s-\s(?&lt;failure&gt;[\w\s]+)" | stats count(failure) by failure</query>
-          <earliest>$earliest$</earliest>
-          <latest>$latest$</latest>
-        </search>
-        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
-        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
-        <option name="charting.axisTitleX.visibility">visible</option>
-        <option name="charting.axisTitleY.visibility">visible</option>
-        <option name="charting.axisTitleY2.visibility">visible</option>
-        <option name="charting.axisX.scale">linear</option>
-        <option name="charting.axisY.scale">linear</option>
-        <option name="charting.axisY2.enabled">0</option>
-        <option name="charting.axisY2.scale">inherit</option>
-        <option name="charting.chart">pie</option>
-        <option name="charting.chart.bubbleMaximumSize">50</option>
-        <option name="charting.chart.bubbleMinimumSize">10</option>
-        <option name="charting.chart.bubbleSizeBy">area</option>
-        <option name="charting.chart.nullValueMode">gaps</option>
-        <option name="charting.chart.showDataLabels">none</option>
-        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
-        <option name="charting.chart.stackMode">default</option>
-        <option name="charting.chart.style">shiny</option>
-        <option name="charting.drilldown">all</option>
-        <option name="charting.layout.splitSeries">0</option>
-        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
-        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
-        <option name="charting.legend.placement">right</option>
-      </chart>
-    </panel>
-    <panel>
-      <title>[REST] Errors</title>
-      <chart>
-        <title>Group by IMS org</title>
-        <search>
-          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ srv="connectors-rest" "lvl=ERROR" | stats count(imsOrg) by imsOrg</query>
-          <earliest>$earliest$</earliest>
-          <latest>$latest$</latest>
-        </search>
-        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
-        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
-        <option name="charting.axisTitleX.visibility">visible</option>
-        <option name="charting.axisTitleY.visibility">visible</option>
-        <option name="charting.axisTitleY2.visibility">visible</option>
-        <option name="charting.axisX.scale">linear</option>
-        <option name="charting.axisY.scale">linear</option>
-        <option name="charting.axisY2.enabled">0</option>
-        <option name="charting.axisY2.scale">inherit</option>
-        <option name="charting.chart">pie</option>
-        <option name="charting.chart.bubbleMaximumSize">50</option>
-        <option name="charting.chart.bubbleMinimumSize">10</option>
-        <option name="charting.chart.bubbleSizeBy">area</option>
-        <option name="charting.chart.nullValueMode">gaps</option>
-        <option name="charting.chart.showDataLabels">none</option>
-        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
-        <option name="charting.chart.stackMode">default</option>
-        <option name="charting.chart.style">shiny</option>
-        <option name="charting.drilldown">all</option>
-        <option name="charting.layout.splitSeries">0</option>
-        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
-        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
-        <option name="charting.legend.placement">right</option>
-      </chart>
     </panel>
     <panel>
       <title>[REST] Errors</title>
@@ -686,6 +731,59 @@
   </row>
   <row>
     <panel>
+      <title>Running Containers</title>
+      <chart>
+        <title>Observer</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ | timechart span=$span$ count by host</query>
+          <earliest>-3d@d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.stackMode">stacked100</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">1</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Running Containers</title>
+      <chart>
+        <title>Rest</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ | timechart span=$span$ count by host</query>
+          <earliest>-3d@d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked100</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">1</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Failed Pipeline Runs</title>
+      <table>
+        <search>
+          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ | spath resourceId | spath level | spath category | search category="PipelineRuns" level=Error resourceId="/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*" | table _time, category, pipelineName, level, failureType, properties.Parameters.imsOrgId, resourceId, start</query>
+          <earliest>-1d</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
       <title>Connectors - overview</title>
       <chart>
         <title>WARN by service (span=$span$)</title>
@@ -824,19 +922,6 @@
     </panel>
   </row>
   <row>
-    <panel>
-      <title>Connectors - Missing Temporal field on DSV Errors</title>
-      <single>
-        <title>Total errors</title>
-        <search>
-          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ srv="connectors-catalog-observer" "lvl=ERROR" | rex field=_raw "Failed to find temporalField on DatasetView=(?&lt;dsvId&gt;)" | stats count(dsvId) as Total</query>
-          <earliest>$earliest$</earliest>
-          <latest>$latest$</latest>
-        </search>
-        <option name="drilldown">all</option>
-        <option name="height">137</option>
-      </single>
-    </panel>
     <panel>
       <title>Connectors - Missing Temporal field on DSV Errors</title>
       <chart>
