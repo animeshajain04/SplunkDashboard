@@ -36,19 +36,19 @@
       <choice value="1d">1d</choice>
       <choice value="1w">1w</choice>
     </input>
-    <input type="time">
-      <label>Interval</label>
-      <default>
-        <earliestTime>-12h</earliestTime>
-        <latestTime>now</latestTime>
-      </default>
-    </input>
     <input type="dropdown" token="ADFpipeline">
       <label>ADF Failed Pipelines</label>
       <choice value="-dev">dev</choice>
       <choice value="-stg">stage</choice>
       <choice value="-prod">prod</choice>
       <initialValue>-stg</initialValue>
+    </input>
+    <input type="time">
+      <label>Interval</label>
+      <default>
+        <earliestTime>-12h</earliestTime>
+        <latestTime>now</latestTime>
+      </default>
     </input>
   </fieldset>
   <row>
@@ -89,8 +89,8 @@
   </row>
   <row>
     <panel>
+      <title>ADF Pipelines Failed with System Errors in Last 30 Days (span = 1 Day)</title>
       <chart>
-        <title>ADF Pipelines Failed with System Errors in Last 30 Days (span = 1 Day)</title>
         <search>
           <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ "/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*"  "SystemError" | timechart span=1d count(_raw) as FailedCount</query>
           <earliest>-30d@d</earliest>
@@ -101,10 +101,10 @@
       </chart>
     </panel>
     <panel>
+      <title>ADF Pipelines Failed with User Errors in last 30 Days (span = 1 Day)</title>
       <chart>
-        <title>ADF Pipelines Failed with User Errors in last 30 Days (span = 1 Day)</title>
         <search>
-          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ "/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*"  "UserError" | timechart span=1d count(_raw) as FailedCount</query>
+          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ "/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*"  "UserError" | spath category | search category="PipelineRuns" level=Error | timechart span=1d count(_raw) as FailedCount</query>
           <earliest>-30d@d</earliest>
           <latest>now</latest>
         </search>
@@ -113,15 +113,18 @@
       </chart>
     </panel>
     <panel>
-      <table>
-        <title>Possible Data Loss Because of Failed Pipelines (Last 4 Hours)</title>
+      <title>Azure Return Codes</title>
+      <chart>
         <search>
-          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ | spath properties.Parameters.ingestionEnd | spath resourceId | spath level | spath category | search category="PipelineRuns" level=Error resourceId="/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*" | spath properties.Parameters.ingestionStart | rename properties.Parameters.ingestionStart as ingestionStart | rename properties.Parameters.ingestionEnd as ingestionEnd | table resourceId, ingestionStart,  ingestionEnd, pipelineName | sort ingestionStart | stats count by ingestionStart, ingestionEnd, pipelineName | search count &gt; 1</query>
-          <earliest>-4h@m</earliest>
-          <latest>now</latest>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ "c.a.p.d.connectors.azure.http.wire.filter:102" | rex field=_raw "c.a.p.d.connectors.azure.http.wire.filter:102 - &lt; (?&lt;retcode&gt;.*)" | timechart span=1h count by retcode</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+          <refresh>30s</refresh>
+          <refreshType>delay</refreshType>
         </search>
-        <option name="drilldown">none</option>
-      </table>
+        <option name="charting.chart">line</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
     </panel>
   </row>
   <row>
@@ -131,8 +134,8 @@
         <title>Observer (span=1min)</title>
         <search>
           <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ "Retrieved the healthStatus=5*" | rex field=_raw " for serviceName=(?&lt;from&gt;.*) with response" | search from!=NULL | timechart span=1m count(from) by from</query>
-          <earliest>-12h@h</earliest>
-          <latest>now</latest>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
         </search>
         <option name="charting.chart">column</option>
         <option name="charting.drilldown">none</option>
@@ -144,8 +147,8 @@
         <title>Rest (span=1min)</title>
         <search>
           <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ "Retrieved the healthStatus=5*" | rex field=_raw " for serviceName=(?&lt;from&gt;.*) with response" | search from!=NULL | timechart span=1m count(from) by from</query>
-          <earliest>-24h@h</earliest>
-          <latest>now</latest>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
         </search>
         <option name="charting.chart">column</option>
         <option name="charting.drilldown">none</option>
@@ -736,8 +739,8 @@
         <title>Observer</title>
         <search>
           <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ | timechart span=$span$ count by host</query>
-          <earliest>-3d@d</earliest>
-          <latest>now</latest>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
         </search>
         <option name="charting.chart">column</option>
         <option name="charting.chart.showDataLabels">none</option>
@@ -752,8 +755,8 @@
         <title>Rest</title>
         <search>
           <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ | timechart span=$span$ count by host</query>
-          <earliest>-3d@d</earliest>
-          <latest>now</latest>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
         </search>
         <option name="charting.chart">column</option>
         <option name="charting.chart.stackMode">stacked100</option>
@@ -768,8 +771,8 @@
       <table>
         <search>
           <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ | spath resourceId | spath level | spath category | search category="PipelineRuns" level=Error resourceId="/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*" | table _time, category, pipelineName, level, failureType, properties.Parameters.imsOrgId, resourceId, start</query>
-          <earliest>-1d</earliest>
-          <latest>now</latest>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
           <sampleRatio>1</sampleRatio>
         </search>
         <option name="count">100</option>
@@ -956,6 +959,54 @@
         <option name="charting.legend.placement">right</option>
         <option name="height">137</option>
       </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>[Observer] Daily Failure Report (Last 24Hours) : Failed to...</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ "lvl=ERROR" | rex field=_raw "Failed to (?&lt;failure&gt;[\w\s]+)" | stats count(failure) by failure | sort count(failure) desc</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>[Rest] Daily Failure Report (Last 24Hours) : Failed to...</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-rest$sourcetype_suffix$ "lvl=ERROR" | rex field=_raw "Failed to (?&lt;failure&gt;[\w\s]+)" | stats count(failure) by failure | sort count(failure) desc</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>Retries Exceeded in last 24Hours in Rest and Observer</title>
+        <search>
+          <query>index=$index$ sourcetype=connectors-observer$sourcetype_suffix$ OR sourcetype=connectors-rest$sourcetype_suffix$ "lvl=INFO" | rex field=_raw "Retries exceeded on api=(?&lt;retry&gt;\[(.*?)\])" | stats count(retry) by retry</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>Possible Data Loss Because of Failed Pipelines (Last 24 Hours)</title>
+        <search>
+          <query>index=$index$ sourcetype=azure-metrics$ADFpipeline$ | spath properties.Parameters.ingestionEnd | spath resourceId | spath level | spath category | search category="PipelineRuns" level=Error resourceId="/SUBSCRIPTIONS/*/RESOURCEGROUPS/*/PROVIDERS/MICROSOFT.DATAFACTORY/FACTORIES/*" | spath properties.Parameters.ingestionStart | rename properties.Parameters.ingestionStart as ingestionStart | rename properties.Parameters.ingestionEnd as ingestionEnd | table resourceId, ingestionStart,  ingestionEnd, pipelineName | sort ingestionStart | stats count by ingestionStart, ingestionEnd, pipelineName | search count &gt; 1</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
     </panel>
   </row>
 </form>
